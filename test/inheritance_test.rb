@@ -81,6 +81,31 @@ class InheritanceTest < Minitest::Test
     assert_equal 2, Searchkick.search("bear", models: [Cat, Dog]).size
   end
 
+  def test_partial_reindex
+    store_names ["Buddy"], Dog
+
+    assert_equal ["Buddy"], Animal.search("budd", type: [Dog], load: false).map(&:name)
+
+    # Update the record to change the type to mess with the record
+    # and do not call the callbacks to avoid reindexing
+    animal = Dog.first
+    animal.name = "Charlie"
+    animal.type = "Cat"
+    Searchkick.callbacks(false) do
+      animal.save!
+    end
+
+    Animal.reindex(:full_name_data)
+
+    # Reindex records to have the `full_name` available
+    assert_equal ["Charlie the Cat"], Animal.search("charlie", load: false).map(&:full_name)
+
+    # Does not change the original index (name still Buddy and type still Dog)
+    assert_equal ["Buddy"], Animal.search("buddy", type: [Dog], load: false).map(&:name)
+    assert_equal ["dog"], Animal.search("buddy", type: [Dog], load: false).map(&:type)
+  end
+
+
   def test_missing_records
     store_names ["Bear A"], Cat
     store_names ["Bear B"], Dog
